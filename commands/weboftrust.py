@@ -2,7 +2,7 @@ import argparse
 from os import path, listdir
 import json
 import yaml
-import pyjq
+import jmespath
 import urllib.parse
 
 from shared.common import parse_arguments, make_list, query_aws, get_regions
@@ -21,16 +21,16 @@ def get_regional_vpc_peerings(region):
     vpc_peerings = query_aws(
         region.account, "ec2-describe-vpc-peering-connections", region
     )
-    resource_filter = ".VpcPeeringConnections[]?"
-    return pyjq.all(resource_filter, vpc_peerings)
+    resource_filter = "vpcpeeringconnection.VpcPeeringConnections[]?"
+    return jmespath.search(resource_filter, {"vpcpeeringconnection": vpc_peerings})
 
 
 def get_regional_direct_connects(region):
     direct_connects = query_aws(
         region.account, "/directconnect-describe-connections", region
     )
-    resource_filter = ".connections[]?"
-    return pyjq.all(resource_filter, direct_connects)
+    resource_filter = "connections.connections[]?"
+    return jmespath.search(resource_filter, {"vpcpeeringconnection": direct_connects})
 
 
 def add_connection(connections, source, target, reason):
@@ -179,8 +179,9 @@ def get_iam_trusts(account, nodes, connections, connections_to_get):
         Region(account, {"RegionName": "us-east-1"})
     )["SAMLProviderList"]
 
-    for role in pyjq.all(".RoleDetailList[]", iam):
-        principals = pyjq.all(".AssumeRolePolicyDocument.Statement[].Principal", role)
+    for role in jmespath.search("roledetaillist.RoleDetailList[]", {"roledetaillist": iam}):
+        principals = jmespath.search("assumerolepolicydocument.AssumeRolePolicyDocument.Statement[].Principal",
+                                     {"assumerolepolicydocument": role})
         for principal in principals:
             assume_role_nodes = set()
             federated_principals = principal.get("Federated", None)
@@ -296,7 +297,7 @@ def get_iam_trusts(account, nodes, connections, connections_to_get):
                 access_type = "iam"
                 # TODO: Identify all admins better.  Use code from find_admins.py
                 for m in role["AttachedManagedPolicies"]:
-                    for p in pyjq.all(".Policies[]", iam):
+                    for p in jmespath.search("policies.Policies[]", {"policies": iam}):
                         if p["Arn"] == m["PolicyArn"]:
                             for policy_doc in p["PolicyVersionList"]:
                                 if policy_doc["IsDefaultVersion"] == True:

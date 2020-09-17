@@ -22,7 +22,7 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWIS
 USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ---------------------------------------------------------------------------
 """
-import pyjq
+import jmespath
 from abc import ABCMeta
 from netaddr import IPNetwork, IPAddress
 from six import add_metaclass
@@ -311,43 +311,43 @@ class Ec2(Leaf):
             # connections, we'll assume that each autoscaling instance would have the same connections
             # as others
             self._ips = []
-            private_ips = pyjq.all(
-                ".NetworkInterfaces[].PrivateIpAddresses[].PrivateIpAddress",
-                self._json_blob,
+            private_ips = jmespath.search(
+                "interfaces.NetworkInterfaces[].PrivateIpAddresses[].PrivateIpAddress",
+                {"interfaces": self._json_blob},
             )
             self._ips.extend([x for x in private_ips if x is not None])
-            public_ips = pyjq.all(
-                ".NetworkInterfaces[].PrivateIpAddresses[].Association.PublicIp",
-                self._json_blob,
+            public_ips = jmespath.search(
+                "interfaces.NetworkInterfaces[].PrivateIpAddresses[].Association.PublicIp",
+                {"interfaces": self._json_blob},
             )
             self._ips.extend([x for x in public_ips if x is not None])
         return self._ips
 
     @property
     def tags(self):
-        return pyjq.all(".Tags[]", self._json_blob)
+        return jmespath.search("tags.Tags[]", {"tags": self._json_blob})
 
     @property
     def subnets(self):
-        return pyjq.all(".NetworkInterfaces[].SubnetId", self._json_blob)
+        return jmespath.search("interfaces.NetworkInterfaces[].SubnetId", {"interfaces": self._json_blob})
 
     @property
     def security_groups(self):
-        return pyjq.all(".SecurityGroups[].GroupId", self._json_blob)
+        return jmespath.search("securitygroups.SecurityGroups[].GroupId", {"securitygroups": self._json_blob})
 
     def __init__(self, parent, json_blob, collapse_by_tag=None, collapse_asgs=True):
         autoscaling_name = []
         if collapse_asgs:
-            autoscaling_name = pyjq.all(
-                '.Tags[]? | select(.Key == "aws:autoscaling:groupName") | .Value',
-                json_blob,
+            autoscaling_name = jmespath.search(
+                'tags.Tags[]? | select(.Key == "aws:autoscaling:groupName") | .Value',
+                {"tags": json_blob},
             )
 
         collapse_by_tag_value = []
         if collapse_by_tag:
-            collapse_by_tag_value = pyjq.all(
-                '.Tags[]? | select(.Key == "{}") | .Value'.format(collapse_by_tag),
-                json_blob,
+            collapse_by_tag_value = jmespath.search(
+                'tags.Tags[]? | select(.Key == "{}") | .Value'.format(collapse_by_tag),
+                {"tags": json_blob},
             )
 
         if autoscaling_name != []:
@@ -396,18 +396,18 @@ class Elb(Leaf):
         if self._subnet:
             return self._subnet
         else:
-            return pyjq.all(".Subnets[]", self._json_blob)
+            return jmespath.search("subnets.Subnets[]", {"subnets": self._json_blob})
 
     @property
     def is_public(self):
-        scheme = pyjq.all(".Scheme", self._json_blob)[0]
+        scheme = jmespath.search("scheme.Scheme", {"scheme": self._json_blob})[0]
         if scheme == "internet-facing":
             return True
         return False
 
     @property
     def security_groups(self):
-        return pyjq.all(".SecurityGroups[]?", self._json_blob)
+        return jmespath.search("securitygroups.SecurityGroups[]?", {"securitygroups": self._json_blob})
 
     def __init__(self, parent, json_blob):
         self._type = "elb"
@@ -449,18 +449,19 @@ class Elbv2(Leaf):
         if self._subnet:
             return self._subnet
         else:
-            return pyjq.all(".AvailabilityZones[].SubnetId", self._json_blob)
+            return jmespath.search("availabilityzones.AvailabilityZones[].SubnetId",
+                                   {"availabilityzones": self._json_blob})
 
     @property
     def is_public(self):
-        scheme = pyjq.all(".Scheme", self._json_blob)[0]
+        scheme = jmespath.search("scheme.Scheme", {"scheme": self._json_blob})[0]
         if scheme == "internet-facing":
             return True
         return False
 
     @property
     def security_groups(self):
-        return pyjq.all(".SecurityGroups[]?", self._json_blob)
+        return jmespath.search("securitygroups.SecurityGroups[]?", {"securitygroups": self._json_blob})
 
     def __init__(self, parent, json_blob):
         self._type = "elbv2"
@@ -494,8 +495,8 @@ class Rds(Leaf):
         if self._subnet:
             return self._subnet
         else:
-            return pyjq.all(
-                ".DBSubnetGroup.Subnets[].SubnetIdentifier", self._json_blob
+            return jmespath.search(
+                "dbsubnetgroup.DBSubnetGroup.Subnets[].SubnetIdentifier", {"dbsubnetgroup": self._json_blob}
             )
 
     @property
@@ -512,17 +513,18 @@ class Rds(Leaf):
 
     @property
     def is_public(self):
-        return pyjq.all(".PubliclyAccessible", self._json_blob)[0]
+        return jmespath.search("publiclyaccessible.PubliclyAccessible", {"publiclyaccessible": self._json_blob})[0]
 
     @property
     def security_groups(self):
-        return pyjq.all(".VpcSecurityGroups[].VpcSecurityGroupId", self._json_blob)
+        return jmespath.search("vpcsecuritygroups.VpcSecurityGroups[].VpcSecurityGroupId",
+                               {"vpcsecuritygroups": self._json_blob})
 
     def __init__(self, parent, json_blob):
         self._type = "rds"
 
         # Check if this is a read-replicable
-        if pyjq.all(".ReadReplicaSourceDBInstanceIdentifier", json_blob) != [None]:
+        if jmespath.search("identifiers.ReadReplicaSourceDBInstanceIdentifier", {"identifiers": json_blob}) != [None]:
             self._type = "rds_rr"
 
         self._local_id = json_blob["DBInstanceIdentifier"]
@@ -563,7 +565,7 @@ class VpcEndpoint(Leaf):
         else:
             # TODO Has SubnetIds not Subnet names
             # And in the case of Gateway endpoints, it has only a VPC
-            return pyjq.all(".SubnetIds[]", self._json_blob)
+            return jmespath.search("subnetids.SubnetIds[]", {"subnetids": self._json_blob})
 
     @property
     def is_public(self):
@@ -571,7 +573,7 @@ class VpcEndpoint(Leaf):
 
     @property
     def security_groups(self):
-        return pyjq.all(".Groups[].GroupId", self._json_blob)
+        return jmespath.search("groups.Groups[].GroupId", {"groups": self._json_blob})
 
     def __init__(self, parent, json_blob):
         self._type = "vpc_endpoint"
@@ -621,7 +623,7 @@ class Ecs(Leaf):
     @property
     def ips(self):
         ips = []
-        for detail in pyjq.all(".attachments[].details[]", self._json_blob):
+        for detail in jmespath.search("attachments.attachments[].details[]", {"attachments": self._json_blob}):
             if detail["name"] == "networkInterfaceId":
                 eni = detail["value"]
                 interfaces_json = query_aws(
@@ -641,14 +643,14 @@ class Ecs(Leaf):
 
     @property
     def subnets(self):
-        for detail in pyjq.all(".attachments[].details[]", self._json_blob):
+        for detail in jmespath.search("attachments.attachments[].details[]", {"attachments": self._json_blob}):
             if detail["name"] == "subnetId":
                 return [detail["value"]]
         return []
 
     @property
     def tags(self):
-        return pyjq.all(".tags[]", self._json_blob)
+        return jmespath.search("tags.tags[]", {"tags": self._json_blob})
 
     @property
     def is_public(self):
@@ -660,7 +662,8 @@ class Ecs(Leaf):
     @property
     def security_groups(self):
         sgs = []
-        for detail in pyjq.all(".attachments[].details[]", self._json_blob):
+        for detail in jmespath.search("attachments.attachments[].details[]",
+                                      {"attachments": self._json_blob}):
             if detail["name"] == "networkInterfaceId":
                 eni = detail["value"]
                 interfaces_json = query_aws(
@@ -700,11 +703,11 @@ class Lambda(Leaf):
         if self._subnet:
             return self._subnet
         else:
-            return pyjq.all(".VpcConfig.SubnetIds[]", self._json_blob)
+            return jmespath.search("vpcconfig.VpcConfig.SubnetIds[]", {"vpcconfig": self._json_blob})
 
     @property
     def tags(self):
-        return pyjq.all(".tags[]", self._json_blob)
+        return jmespath.search("tags.tags[]", {"tags": self._json_blob})
 
     @property
     def is_public(self):
@@ -712,7 +715,7 @@ class Lambda(Leaf):
 
     @property
     def security_groups(self):
-        return pyjq.all(".VpcConfig.SecurityGroupIds[]", self._json_blob)
+        return jmespath.search("vpcconfig.VpcConfig.SecurityGroupIds[]", {"vpcconfig": self._json_blob})
 
     def __init__(self, parent, json_blob):
         self._type = "lambda"
@@ -788,7 +791,7 @@ class Redshift(Leaf):
 
     @property
     def tags(self):
-        return pyjq.all(".Tags[]", self._json_blob)
+        return jmespath.search("tags.Tags[]", {"tags": self._json_blob})
 
     @property
     def is_public(self):
@@ -799,7 +802,8 @@ class Redshift(Leaf):
 
     @property
     def security_groups(self):
-        return pyjq.all(".VpcSecurityGroups[].VpcSecurityGroupId", self._json_blob)
+        return jmespath.search("vpcsecuritygroups.VpcSecurityGroups[].VpcSecurityGroupId",
+                               {"vpcsecuritygroups": self._json_blob})
 
     def __init__(self, parent, json_blob):
         self._type = "redshift"
@@ -835,7 +839,7 @@ class ElasticSearch(Leaf):
 
     @property
     def subnets(self):
-        return pyjq.all(".VPCOptions.SubnetIds[]", self._json_blob)
+        return jmespath.search("vpcoptions.VPCOptions.SubnetIds[]", {"vpcoptions": self._json_blob})
 
     @property
     def tags(self):
@@ -850,7 +854,7 @@ class ElasticSearch(Leaf):
 
     @property
     def security_groups(self):
-        return pyjq.all(".VPCOptions.SecurityGroupIds[]", self._json_blob)
+        return jmespath.search("vpcoptions.VPCOptions.SecurityGroupIds[]", {"vpcoptions": self._json_blob})
 
     def __init__(self, parent, json_blob):
         self._type = "elasticsearch"

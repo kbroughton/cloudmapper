@@ -1,7 +1,7 @@
 import json
 import yaml
 from os.path import exists
-import pyjq
+import jmespath
 import traceback
 import re
 import pkgutil
@@ -95,7 +95,7 @@ def load_audit_config():
 
 def audit_s3_buckets(findings, region):
     buckets_json = query_aws(region.account, "s3-list-buckets", region)
-    buckets = pyjq.all(".Buckets[].Name", buckets_json)
+    buckets = jmespath.search("buckets.Buckets[].Name", {"buckets": buckets_json})
     for bucket in buckets:
         # Check policy
         try:
@@ -555,14 +555,15 @@ def audit_route53(findings, region):
 
     # Check VPC hosted zones
     regions_json = query_aws(region.account, "describe-regions")
-    regions = pyjq.all(".Regions[].RegionName", regions_json)
+    regions = jmespath.search("regions.Regions[].RegionName", {"regions": regions_json})
     for region_name in regions:
         vpc_json = query_aws(region.account, "ec2-describe-vpcs", region_name)
-        vpcs = pyjq.all(".Vpcs[]?.VpcId", vpc_json)
+        vpcs = jmespath.search("vpcs.Vpcs[]?.VpcId", {"vpcs": vpc_json})
         for vpc in vpcs:
             hosted_zone_file = f"account-data/{region.account.name}/{region.name}/route53-list-hosted-zones-by-vpc/{region_name}/{vpc}"
             hosted_zones_json = json.load(open(hosted_zone_file))
-            hosted_zones = pyjq.all(".HostedZoneSummaries[]?", hosted_zones_json)
+            hosted_zones = jmespath.search("hostedzonesummaries.HostedZoneSummaries[]?",
+                                           {"hostedzonesummaries": hosted_zones_json})
             for hosted_zone in hosted_zones:
                 if hosted_zone.get("Owner", {}).get("OwningAccount", "") != "":
                     if hosted_zone["Owner"]["OwningAccount"] != region.account.local_id:
@@ -859,10 +860,10 @@ def audit_sg(findings, region):
 
     cidrs = {}
     sg_json = query_aws(region.account, "ec2-describe-security-groups", region)
-    sgs = pyjq.all(".SecurityGroups[]?", sg_json)
+    sgs = jmespath.search("securitygroups.SecurityGroups[]?", {"securitygroups": sg_json})
     for sg in sgs:
-        cidr_and_name_list = pyjq.all(
-            ".IpPermissions[]?.IpRanges[]|[.CidrIp,.Description]", sg
+        cidr_and_name_list = jmespath.search(
+            "ippermissions.IpPermissions[]?.IpRanges[]|[.CidrIp,.Description]", {"ippermissions": sg}
         )
         for cidr, name in cidr_and_name_list:
             if not is_external_cidr(cidr):

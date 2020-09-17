@@ -2,7 +2,7 @@ from __future__ import print_function
 import sys
 import json
 import argparse
-import pyjq
+import jmespath
 import os.path
 from shared.nodes import Account, Region
 from shared.common import parse_arguments, query_aws
@@ -64,8 +64,8 @@ def amis(args, accounts, config):
         # Get public images
         public_images_file = "data/aws/{}/ec2-describe-images.json".format(region)
         public_images = json.load(open(public_images_file))
-        resource_filter = ".Images[]"
-        public_images = pyjq.all(resource_filter, public_images)
+        resource_filter = "images.Images[]"
+        public_images = jmespath.search(resource_filter, {"images": public_images})
 
         for account in accounts:
             account = Account(None, account)
@@ -73,16 +73,16 @@ def amis(args, accounts, config):
 
             instances = query_aws(account, "ec2-describe-instances", region)
             resource_filter = (
-                '.Reservations[].Instances[] | select(.State.Name == "running")'
+                'reservations.Reservations[].Instances[] | select(.State.Name == "running")'
             )
             if args.instance_filter != "":
                 resource_filter += "|{}".format(args.instance_filter)
-            instances = pyjq.all(resource_filter, instances)
-
+            instances = jmespath.search(resource_filter, {"reservations": instances})
+#kb
             account_images = query_aws(account, "ec2-describe-images", region)
-            resource_filter = ".Images[]"
-            account_images = pyjq.all(resource_filter, account_images)
-
+            resource_filter = "images.Images[]"
+            account_images = jmespath.search(resource_filter, {"images": account_images})
+#kb
             for instance in instances:
                 image_id = instance["ImageId"]
                 image_description = ""

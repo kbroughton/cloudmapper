@@ -1,4 +1,4 @@
-import pyjq
+import jmespath
 
 from shared.common import query_aws, get_regions
 from shared.nodes import Account, Region
@@ -18,11 +18,11 @@ def find_unused_security_groups(region):
 
     defined_sg_set = {}
 
-    for sg in pyjq.all(".SecurityGroups[]", defined_sgs):
+    for sg in jmespath.search("securitygroups.SecurityGroups[]", {"securitygroups": defined_sgs}):
         defined_sg_set[sg["GroupId"]] = sg
 
-    for used_sg in pyjq.all(
-        ".NetworkInterfaces[].Groups[].GroupId", network_interfaces
+    for used_sg in jmespath.search(
+        "networkinterfaces.NetworkInterfaces[].Groups[].GroupId", {"networkinterfaces": network_interfaces}
     ):
         used_sgs.add(used_sg)
 
@@ -57,7 +57,7 @@ def find_unused_security_groups(region):
 def find_unused_volumes(region):
     unused_volumes = []
     volumes = query_aws(region.account, "ec2-describe-volumes", region)
-    for volume in pyjq.all('.Volumes[]|select(.State=="available")', volumes):
+    for volume in jmespath.search('volumes.Volumes[]|select(.State=="available")', {"volumes": volumes}):
         unused_volumes.append({"id": volume["VolumeId"]})
 
     return unused_volumes
@@ -66,7 +66,7 @@ def find_unused_volumes(region):
 def find_unused_elastic_ips(region):
     unused_ips = []
     ips = query_aws(region.account, "ec2-describe-addresses", region)
-    for ip in pyjq.all(".Addresses[] | select(.AssociationId == null)", ips):
+    for ip in jmespath.search("addresses.Addresses[] | select(.AssociationId == null)", {"addresses": ips}):
         unused_ips.append({"id": ip.get("AllocationId", "Un-allocated IP"), "ip": ip["PublicIp"]})
 
     return unused_ips
@@ -77,8 +77,8 @@ def find_unused_network_interfaces(region):
     network_interfaces = query_aws(
         region.account, "ec2-describe-network-interfaces", region
     )
-    for network_interface in pyjq.all(
-        '.NetworkInterfaces[]|select(.Status=="available")', network_interfaces
+    for network_interface in jmespath.search(
+        'networkinterfaces.NetworkInterfaces[]|select(.Status=="available")', {"networkinterfaces": network_interfaces}
     ):
         unused_network_interfaces.append(
             {"id": network_interface["NetworkInterfaceId"]}
@@ -89,7 +89,8 @@ def find_unused_network_interfaces(region):
 def find_unused_elastic_load_balancers(region):
     unused_elastic_load_balancers = []
     elastic_load_balancers = query_aws(region.account, "elb-describe-load-balancers", region)
-    for elastic_load_balancer in pyjq.all(".LoadBalancerDescriptions[] | select(.Instances == [])", elastic_load_balancers):
+    for elastic_load_balancer in jmespath.search("loadbalancerdescriptions.LoadBalancerDescriptions[] | select(.Instances == [])",
+                                                 {"loadbalancerdescriptions": elastic_load_balancers}):
         unused_elastic_load_balancers.append({"LoadBalancerName": elastic_load_balancer["LoadBalancerName"]})
         
     return unused_elastic_load_balancers

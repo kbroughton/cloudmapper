@@ -2,7 +2,7 @@ from __future__ import print_function
 import argparse
 import json
 import datetime
-import pyjq
+import jmespath
 import yaml
 import sys
 from netaddr import IPNetwork
@@ -158,7 +158,7 @@ def get_regions(account, outputfilter={}):
             outputfilter["regions"]
         )
 
-    regions = pyjq.all(".Regions[]{}".format(region_filter), region_data)
+    regions = jmespath.search("regions.Regions[]{}".format(region_filter), {"regions": region_data})
     return regions
 
 
@@ -269,9 +269,9 @@ def get_account_stats(account, all_resources=False):
             # S3 buckets require special code to identify their location
             if resource["name"] == "S3 buckets":
                 if region.name == "us-east-1":
-                    buckets = pyjq.all(
-                        ".Buckets[].Name",
-                        query_aws(region.account, "s3-list-buckets", region),
+                    buckets = jmespath.search(
+                        "buckets.Buckets[].Name",
+                        {"buckets": query_aws(region.account, "s3-list-buckets", region)},
                     )
                     for bucket in buckets:
                         # Get the bucket's location
@@ -292,12 +292,12 @@ def get_account_stats(account, all_resources=False):
             else:
                 # Normal path
                 stats[resource["name"]][region.name] = sum(
-                    pyjq.all(
+                    jmespath.search(
                         resource["query"],
                         query_aws(region.account, resource["source"], region),
                     )
                 )
-
+#kb
     return stats
 
 

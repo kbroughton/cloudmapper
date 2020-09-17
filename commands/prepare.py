@@ -27,7 +27,7 @@ import json
 import operator
 import itertools
 import argparse
-import pyjq
+import jmespath
 import copy
 import urllib.parse
 from netaddr import IPNetwork, IPAddress
@@ -74,42 +74,43 @@ def get_vpcs(region, outputfilter):
             outputfilter["vpc-names"]
         )
     vpcs = query_aws(region.account, "ec2-describe-vpcs", region)
-    return pyjq.all(".Vpcs[]?{}".format(vpc_filter), vpcs)
+    return jmespath.search("vpcs.Vpcs[]?{}".format(vpc_filter), {"vpcs": vpcs})
 
 
 def get_azs(vpc):
     azs = query_aws(vpc.account, "ec2-describe-availability-zones", vpc.region)
-    resource_filter = ".AvailabilityZones[]"
-    return pyjq.all(resource_filter, azs)
+    resource_filter = "availabilityzones.AvailabilityZones[]"
+    return jmespath.search(resource_filter, {"availabilityzones": azs})
 
 
 def get_vpc_peerings(region):
     vpc_peerings = query_aws(
         region.account, "ec2-describe-vpc-peering-connections", region
     )
-    resource_filter = ".VpcPeeringConnections[]?"
-    return pyjq.all(resource_filter, vpc_peerings)
+    resource_filter = "vpcpeeringconnections.VpcPeeringConnections[]?"
+    return jmespath.search(resource_filter, {"vpcpeeringconnections": vpc_peerings})
 
 
 def get_subnets(az):
     subnets = query_aws(az.account, "ec2-describe-subnets", az.region)
     resource_filter = (
-        '.Subnets[] | select(.VpcId == "{}") | select(.AvailabilityZone == "{}")'
+        'subnets.Subnets[] | select(.VpcId == "{}") | select(.AvailabilityZone == "{}")'
     )
-    return pyjq.all(resource_filter.format(az.vpc.local_id, az.local_id), subnets)
+    return jmespath.search(resource_filter.format(az.vpc.local_id, az.local_id), {"subnets": subnets})
 
 
 def get_ec2s(region):
     instances = query_aws(region.account, "ec2-describe-instances", region.region)
-    resource_filter = '.Reservations[]?.Instances[] | select(.State.Name == "running")'
-    return pyjq.all(resource_filter, instances)
+    resource_filter = 'reservations.Reservations[]?.Instances[] | select(.State.Name == "running")'
+    return jmespath.search(resource_filter, {"reservations": instances})
 
 
 def get_elbs(region):
     load_balancers = query_aws(
         region.account, "elb-describe-load-balancers", region.region
     )
-    return pyjq.all(".LoadBalancerDescriptions[]?", load_balancers)
+    return jmespath.search("loadbalancerdescriptions.LoadBalancerDescriptions[]?",
+                           {"loadbalancerdescriptions": load_balancers})
 
 
 def get_elbv2s(region):
@@ -117,17 +118,17 @@ def get_elbv2s(region):
     load_balancers = query_aws(
         region.account, "elbv2-describe-load-balancers", region.region
     )
-    return pyjq.all(".LoadBalancers[]?", load_balancers)
+    return jmespath.search("loadbalancers.LoadBalancers[]?", {"loadbalancers": load_balancers})
 
 
 def get_vpc_endpoints(region):
     endpoints = query_aws(region.account, "ec2-describe-vpc-endpoints", region.region)
-    return pyjq.all(".VpcEndpoints[]?", endpoints)
+    return jmespath.search("vpcendpoints.VpcEndpoints[]?", {"vpcendpoints": endpoints})
 
 
 def get_rds_instances(region):
     instances = query_aws(region.account, "rds-describe-db-instances", region.region)
-    return pyjq.all(".DBInstances[]?", instances)
+    return jmespath.search("dbinstances.DBInstances[]?", {"dbinstances": instances})
 
 
 def get_ecs_tasks(region):
@@ -150,18 +151,18 @@ def get_ecs_tasks(region):
 
 def get_lambda_functions(region):
     functions = query_aws(region.account, "lambda-list-functions", region.region)
-    return pyjq.all(".Functions[]?|select(.VpcConfig!=null)", functions)
+    return jmespath.search("functions.Functions[]?|select(.VpcConfig!=null)", {"functions": functions})
 
 
 def get_redshift(region):
     clusters = query_aws(region.account, "redshift-describe-clusters", region.region)
-    return pyjq.all(".Clusters[]?", clusters)
+    return jmespath.search("clusters.Clusters[]?", {"clusters": clusters})
 
 
 def get_elasticsearch(region):
     es_domains = []
     domain_json = query_aws(region.account, "es-list-domain-names", region.region)
-    domains = pyjq.all(".DomainNames[]?", domain_json)
+    domains = jmespath.search("domainnames.DomainNames[]?", {"domainnames": domain_json})
     for domain in domains:
         es = get_parameter_file(
             region, "es", "describe-elasticsearch-domain", domain["DomainName"]
@@ -173,8 +174,8 @@ def get_elasticsearch(region):
 
 def get_sgs(vpc):
     sgs = query_aws(vpc.account, "ec2-describe-security-groups", vpc.region)
-    return pyjq.all(
-        '.SecurityGroups[]? | select(.VpcId == "{}")'.format(vpc.local_id), sgs
+    return jmespath.search(
+        'securitygroups.SecurityGroups[]? | select(.VpcId == "{}")'.format(vpc.local_id), {"securitygroups": sgs}
     )
 
 
@@ -187,7 +188,7 @@ def get_external_cidrs(account, config):
 
             # Get external IPs
             for sg in sgs:
-                cidrs = pyjq.all(".IpPermissions[].IpRanges[].CidrIp", sg)
+                cidrs = jmespath.search("ippermissions.IpPermissions[].IpRanges[].CidrIp", {"ippermissions": sg})
                 for cidr in cidrs:
                     unique_cidrs[cidr] = 1
 
@@ -227,7 +228,7 @@ def get_connections(cidrs, vpc, outputfilter):
     # within that group.
     for sg in get_sgs(vpc):
         # Get the CIDRs that are allowed to connect
-        for cidr in pyjq.all(".IpPermissions[].IpRanges[].CidrIp", sg):
+        for cidr in jmespath.search("ippermissions.IpPermissions[].IpRanges[].CidrIp", {"ippermissions": sg}):
             if not is_external_cidr(cidr):
                 # This is a private IP, ex. 10.0.0.0/16
 
@@ -279,8 +280,8 @@ def get_connections(cidrs, vpc, outputfilter):
 
         if outputfilter.get("internal_edges", True):
             # Connect allowed in Security Groups
-            for ingress_sg in pyjq.all(
-                ".IpPermissions[].UserIdGroupPairs[].GroupId", sg
+            for ingress_sg in jmespath.search(
+                "ippermissions.IpPermissions[].UserIdGroupPairs[].GroupId", {"ippermissions": sg}
             ):
                 # We have an SG and a list of SG's it allows in
                 for target in sg_to_instance_mapping.get(sg["GroupId"], {}):

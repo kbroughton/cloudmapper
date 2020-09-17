@@ -1,7 +1,7 @@
 from collections import OrderedDict
 from os import path
 from netaddr import IPNetwork
-import pyjq
+import jmespath
 
 from shared.common import parse_arguments, query_aws, get_regions, is_external_cidr, is_unblockable_cidr
 from shared.nodes import Account, Region
@@ -19,10 +19,10 @@ def get_cidrs_for_account(account, cidrs):
     for region_json in get_regions(account):
         region = Region(account, region_json)
         sg_json = query_aws(account, "ec2-describe-security-groups", region)
-        sgs = pyjq.all(".SecurityGroups[]", sg_json)
+        sgs = jmespath.search("securitygroups.SecurityGroups[]", {"securitygroups": sg_json})
         for sg in sgs:
-            cidr_and_name_list = pyjq.all(
-                ".IpPermissions[].IpRanges[]|[.CidrIp,.Description]", sg
+            cidr_and_name_list = jmespath.search(
+                "ippermissions.IpPermissions[].IpRanges[]|[.CidrIp,.Description]", {"ippermissions": sg}
             )
             for cidr, name in cidr_and_name_list:
                 if not is_external_cidr(cidr):

@@ -8,7 +8,7 @@ import json
 import time
 import boto3
 import yaml
-import pyjq
+import jmespath
 import urllib.parse
 from botocore.exceptions import ClientError, EndpointConnectionError, NoCredentialsError
 from shared.common import get_account, custom_serializer
@@ -490,7 +490,7 @@ def collect(arguments):
                         pyjq_parse_string = "|".join(
                             parameters[dynamic_parameter].split("|")[1:]
                         )
-                        for parameter in pyjq.all(pyjq_parse_string, parameter_values):
+                        for parameter in jmespath.search(pyjq_parse_string, parameter_values):
                             filename = get_filename_from_parameter(parameter)
                             identifier = get_identifier_from_parameter(parameter)
                             call_parameters = dict(parameters)

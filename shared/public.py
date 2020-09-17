@@ -1,7 +1,7 @@
 from __future__ import print_function
 import json
 import os
-import pyjq
+import jmespath
 
 from shared.nodes import Account, Region, is_public_ip
 from commands.prepare import build_data_structure
@@ -92,15 +92,17 @@ def get_public_nodes(account, config, use_cache=False):
     warnings = []
 
     # Look at all the edges for ones connected to the public Internet (0.0.0.0/0)
-    for edge in pyjq.all(
-        '.[].data|select(.type=="edge")|select(.source=="0.0.0.0/0")', network
+    for edge in jmespath.search(
+        'network.[].data|select(.type=="edge")|select(.source=="0.0.0.0/0")', {"network": network}
     ):
 
         # Find the node at the other end of this edge
         target = {"arn": edge["target"], "account": account["name"]}
-        target_node = pyjq.first(
-            '.[].data|select(.id=="{}")'.format(target["arn"]), network, {}
+        target_node = jmespath.search(
+            'network.[].data|select(.id=="{}")'.format(target["arn"]), {"network": network}
         )
+        if not target_node:
+            target_node = {}
 
         # Depending on the type of node, identify what the IP or hostname is
         if target_node["type"] == "elb":
@@ -140,10 +142,10 @@ def get_public_nodes(account, config, use_cache=False):
             raise Exception("Unknown type: {}".format(target_node["type"]))
 
         # Check if any protocol is allowed (indicated by IpProtocol == -1)
-        ingress = pyjq.all(".[]", edge.get("node_data", {}))
+        ingress = jmespath.search("node.[]", {"node": edge.get("node_data", {})})
 
-        sg_group_allowing_all_protocols = pyjq.first(
-            '.[]|select(.IpPermissions[]?|.IpProtocol=="-1")|.GroupId', ingress, None
+        sg_group_allowing_all_protocols = jmespath.search(
+            'ingress.[]|select(.IpPermissions[]?|.IpProtocol=="-1")|.GroupId', {"ingress": ingress},
         )
         public_sgs = {}
         if sg_group_allowing_all_protocols is not None:
@@ -164,13 +166,13 @@ def get_public_nodes(account, config, use_cache=False):
             for ip_permission in sg.get("IpPermissions", []):
                 selection = 'select((.IpProtocol=="tcp") or (.IpProtocol=="udp")) | select(.IpRanges[].CidrIp=="0.0.0.0/0")'
                 sg_port_ranges.extend(
-                    pyjq.all(
+                    jmespath.search(
                         "{}| [.FromPort,.ToPort]".format(selection), ip_permission
                     )
                 )
                 selection = 'select(.IpProtocol=="-1") | select(.IpRanges[].CidrIp=="0.0.0.0/0")'
                 sg_port_ranges.extend(
-                    pyjq.all(
+                    jmespath.search(
                         "{}| [0,65535]".format(selection), ip_permission
                     )
                 )
@@ -188,11 +190,11 @@ def get_public_nodes(account, config, use_cache=False):
             warnings.append(
                 issue_msg.format(
                     json.dumps(
-                        pyjq.all(
-                            '.[]|select((.IpProtocol!="tcp") and (.IpProtocol!="udp"))'.format(
+                        jmespath.search(
+                            'ingress.[]|select((.IpProtocol!="tcp") and (.IpProtocol!="udp"))'.format(
                                 selection
                             ),
-                            ingress,
+                            {"ingress": ingress},
                         )
                     ),
                     account,
