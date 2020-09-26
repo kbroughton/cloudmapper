@@ -1,4 +1,4 @@
-import pyjq
+from shared.common import pyjq
 
 from shared.common import query_aws, get_regions
 from shared.nodes import Account, Region

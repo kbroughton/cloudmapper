@@ -2,7 +2,19 @@ from __future__ import print_function
 import argparse
 import json
 import datetime
-import pyjq
+try:
+    import pyjq
+except Exception:
+    import subprocess
+    class pyjq:
+        def all(pyjq_parse_string, parameter_values):
+            with open("parameter_file", "w") as f:
+                json.dump(parameter_values, f)
+            pyjq_parse_string = pyjq_parse_string.replace('?|', '').rstrip('.')
+            cmd = ["jq", "<", "parameter_file", pyjq_parse_string]
+            result = subprocess.check_output(cmd, shell=True)
+            result = result.decode('utf-8').rstrip('\n').split('\n')
+            return result
 import yaml
 import sys
 from netaddr import IPNetwork

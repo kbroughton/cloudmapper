@@ -139,7 +139,7 @@
   Request: describe-tags
   Parameters:
   - Name: LoadBalancerNames
-    Value: elb-describe-load-balancers.json|.LoadBalancerDescriptions[]?|[[.LoadBalancerName]]
+    Value: elb-describe-load-balancers.json|.LoadBalancerDescriptions[]?|.LoadBalancerName
 - Service: elbv2
   Request: describe-load-balancers
 - Service: elbv2
@@ -161,7 +161,7 @@
   Request: describe-tags
   Parameters:
   - Name: ResourceArns
-    Value: elbv2-describe-load-balancers.json|.LoadBalancers[]?|[[.LoadBalancerArn]]
+    Value: elbv2-describe-load-balancers.json|.LoadBalancers[]?|.LoadBalancerArn
 - Service: redshift
   Request: describe-clusters
 - Service: redshift

@@ -191,8 +191,8 @@ def get_iam_trusts(account, nodes, connections, connections_to_get):
 
                 for federated_principal in federated_principals:
                     try:
-                        saml_provider_arn = next(saml for saml in saml_providers if saml['Arn'] == federated_principal)['Arn']
-
+                        #if saml_provider_arn = next(saml for saml in saml_providers if saml['Arn'] == federated_principal)['Arn']
+                        saml_provider_arn = federated_principal
                         if 'saml-provider/okta' in saml_provider_arn.lower():
                             node = Account(
                                 json_blob={"id": "okta", "name": "okta", "type": "Okta"}

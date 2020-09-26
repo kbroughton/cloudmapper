@@ -8,17 +8,31 @@ import json
 import time
 import boto3
 import yaml
+
 try:
     import pyjq
     PYJQ_PRESENT = True
-except:
+except Exception:
     import subprocess
-    def jqsearch(pyjq_parse_string, parameter_file):
-        pyjq_parse_string = pyjq_parse_string.replace('?|', '').rstrip('.')
-        cmd = "cat " + parameter_file + " | jq '" + pyjq_parse_string + "'"
-        result = subprocess.check_output(cmd, shell=True)
-        result = result.decode('utf-8').rstrip('\n').split('\n')
-        return result
+    class pyjq:
+
+        def all(pyjq_parse_string, parameter_values):
+            with open("parameter_file", "w") as f:
+                json.dump(parameter_values, f)
+            pyjq_parse_string = pyjq_parse_string.replace('?|', '').rstrip('.')
+            #parameter_file = parameter_file.replace('/.', '').replace('/', '\\')
+            #cmd = "echo " + parameter_value + " | jq " + pyjq_parse_string
+            #cmd = ["echo",parameter_value, "|","jq",pyjq_parse_string]
+            cmd = ["jq", "<", "parameter_file", pyjq_parse_string]
+            print("CMD", cmd)
+            # set content= < paraemter_file
+            result = subprocess.check_output(cmd, shell=True)
+            result = result.decode('utf-8').rstrip('\n').split('\n')
+            return result
+            # \r causes lots of problems. search jq github stedolan --binary option is
+            # supposed to fix but latest win64 release claimed --binary was not an option
+            # more commandline jq techniques avoiding pipe issues
+            # https://stackoverflow.com/questions/43728994/jq-with-windows-batch-select-failing
     PYJQ_PRESENT = False
 
 import urllib.parse
@@ -513,7 +527,9 @@ def collect(arguments):
                                 continue
                             parameter = parameter.strip('"')
                             filename = get_filename_from_parameter(parameter)
+                            filename = filename.rstrip('%22%0D')
                             identifier = get_identifier_from_parameter(parameter)
+                            identifier = identifier.rstrip('%22%0D').rstrip('"','').rstrip('\r')
                             call_parameters = dict(parameters)
                             call_parameters[dynamic_parameter] = identifier
 
