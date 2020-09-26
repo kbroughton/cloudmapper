@@ -8,7 +8,19 @@ import json
 import time
 import boto3
 import yaml
-import pyjq
+try:
+    import pyjq
+    PYJQ_PRESENT = True
+except:
+    import subprocess
+    def jqsearch(pyjq_parse_string, parameter_file):
+        pyjq_parse_string = pyjq_parse_string.replace('?|', '').rstrip('.')
+        cmd = "cat " + parameter_file + " | jq '" + pyjq_parse_string + "'"
+        result = subprocess.check_output(cmd, shell=True)
+        result = result.decode('utf-8').rstrip('\n').split('\n')
+        return result
+    PYJQ_PRESENT = False
+
 import urllib.parse
 from botocore.exceptions import ClientError, EndpointConnectionError, NoCredentialsError
 from shared.common import get_account, custom_serializer
@@ -490,7 +502,16 @@ def collect(arguments):
                         pyjq_parse_string = "|".join(
                             parameters[dynamic_parameter].split("|")[1:]
                         )
-                        for parameter in pyjq.all(pyjq_parse_string, parameter_values):
+                        #for parameter in pyjq.all(pyjq_parse_string, parameter_values):
+
+                        if PYJQ_PRESENT:
+                            results = pyjq.all(pyjq_parse_string, parameter_values)
+                        else:
+                            results = jqsearch(pyjq_parse_string, parameter_file)
+                        for parameter in results:
+                            if not parameter:
+                                continue
+                            parameter = parameter.strip('"')
                             filename = get_filename_from_parameter(parameter)
                             identifier = get_identifier_from_parameter(parameter)
                             call_parameters = dict(parameters)
