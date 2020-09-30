@@ -277,7 +277,11 @@ def get_account_stats(account, all_resources=False):
                         # Get the bucket's location
                         bucket_region = get_parameter_file(
                             region, "s3", "get-bucket-location", bucket
-                        )["LocationConstraint"]
+                        )
+                        # the above could fail if we can ListAllMyBuckets but have no other
+                        # control plane metadata access to the bucket
+                        if bucket_region:
+                            bucket_region = bucket_region["LocationConstraint"]
 
                         # Convert the value to a name.
                         # See https://docs.aws.amazon.com/general/latest/gr/rande.html#s3_region
@@ -370,6 +374,9 @@ def get_access_advisor_active_counts(account, max_age=90):
         json_last_access_details = get_parameter_file(
             region, "iam", "get-service-last-accessed-details", job_id
         )
+        # KB added because jobs were not found
+        if not json_last_access_details:
+            return account_stats
         stats["last_access"] = json_last_access_details
 
         stats["is_inactive"] = True
